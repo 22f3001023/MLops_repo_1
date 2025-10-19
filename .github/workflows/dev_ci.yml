@@ -37,7 +37,6 @@ jobs:
     - name: Configure DVC remote (for CI)
       run: |
         dvc remote add -f -d gcsremote gs://mlops-wk-1-sanjay007/dvc_store
-        dvc remote modify gcsremote --local project linear-stock-473507-v3
 
     - name: DVC Pull (fetch model and data)
       run: |
