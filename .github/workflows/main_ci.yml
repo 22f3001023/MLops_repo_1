@@ -49,21 +49,15 @@ jobs:
     - name: Run Pytest for Evaluation
       run: pytest tests/test_evaluation.py
 
-    - name: Train and Evaluate Model (for CML sanity check)
+    - name: Train Model
       run: |
         python src/model.py
-        python -c "
-import joblib
-from sklearn.datasets import load_iris
-from sklearn.model_selection import train_test_split
-from src.evaluation import evaluate_model
-model = joblib.load('models/iris_model.joblib')
-iris = load_iris()
-X, y = iris.data, iris.target
-_, X_test, _, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-evaluate_model(model, X_test, y_test, output_path='metrics.json')
-"
-        cat metrics.json
+        
+    - name: Evaluate Model (run_eval.py)
+      run: python run_eval.py
+         
+    - name: Show Metrics
+      run: cat metrics.json
 
     - name: Run CML report
       env:
@@ -88,4 +82,3 @@ evaluate_model(model, X_test, y_test, output_path='metrics.json')
         echo '```' >> report.md
 
         cml comment create report.md
-
