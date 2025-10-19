@@ -19,7 +19,9 @@ def evaluate_model(model, X_test, y_test, output_path="metrics.json"):
         "f1_score": f1
     }
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    dir_name = os.path.dirname(output_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(metrics, f, indent=4)
 
