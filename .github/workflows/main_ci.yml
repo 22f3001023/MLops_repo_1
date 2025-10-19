@@ -88,3 +88,4 @@ evaluate_model(model, X_test, y_test, output_path='metrics.json')
         echo '```' >> report.md
 
         cml comment create report.md
+

@@ -72,19 +72,19 @@ evaluate_model(model, X_test, y_test, output_path='metrics.json')
         echo "## CI Report (Dev Branch)" > report.md
         echo "### Data Validation Tests" >> report.md
         pytest tests/test_data_validation.py --junitxml=data_validation_report.xml || true
-        echo '```xml' >> report.md
-        cat data_validation_report.xml >> report.md
         echo '```
+        cat data_validation_report.xml >> report.md
+        echo '```' >> report.md
 
         echo "### Model Evaluation Tests" >> report.md
         pytest tests/test_evaluation.py --junitxml=evaluation_report.xml || true
-        echo '```xml' >> report.md
-        cat evaluation_report.xml >> report.md
         echo '```
+        cat evaluation_report.xml >> report.md
+        echo '```' >> report.md
 
         echo "### Model Metrics" >> report.md
-        echo '```json' >> report.md
-        cat metrics.json >> report.md
         echo '```
+        cat metrics.json >> report.md
+        echo '```' >> report.md
 
         cml comment create report.md
