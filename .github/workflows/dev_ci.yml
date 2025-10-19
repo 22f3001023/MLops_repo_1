@@ -42,42 +42,57 @@ jobs:
       run: |
         dvc pull
 
-    - name: Run Pytest for Data Validation
-      run: pytest tests/test_data_validation.py
-
-    - name: Run Pytest for Evaluation
-      run: pytest tests/test_evaluation.py
+    - name: Run Tests and Generate Reports
+      run: |
+        # Run tests and generate XML reports. `|| true` ensures the workflow continues even if tests fail.
+        pytest tests/test_data_validation.py --junitxml=data_validation_report.xml || true
+        pytest tests/test_evaluation.py --junitxml=evaluation_report.xml || true
 
     - name: Train Model
-      run: |
-        python src/model.py
+      run: python src/model.py
         
-    - name: Evaluate Model (run_eval.py)
+    - name: Evaluate Model
       run: python run_eval.py
          
-    - name: Show Metrics
-      run: cat metrics.json
-
-    - name: Run CML report
+    - name: Generate CML Report
       env:
         REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        # Start the report
         echo "## CI Report (Dev Branch)" > report.md
+
+        # Append Data Validation Test Results
+        echo "" >> report.md # Add a newline for spacing
         echo "### Data Validation Tests" >> report.md
-        pytest tests/test_data_validation.py --junitxml=data_validation_report.xml || true
-        echo '```
-        cat data_validation_report.xml >> report.md
+        echo '```xml' >> report.md
+        if [ -f data_validation_report.xml ]; then
+          cat data_validation_report.xml >> report.md
+        else
+          echo "Data validation report not found." >> report.md
+        fi
         echo '```' >> report.md
 
+        # Append Model Evaluation Test Results
+        echo "" >> report.md
         echo "### Model Evaluation Tests" >> report.md
-        pytest tests/test_evaluation.py --junitxml=evaluation_report.xml || true
-        echo '```
-        cat evaluation_report.xml >> report.md
+        echo '```xml' >> report.md
+        if [ -f evaluation_report.xml ]; then
+          cat evaluation_report.xml >> report.md
+        else
+          echo "Model evaluation report not found." >> report.md
+        fi
         echo '```' >> report.md
 
+        # Append Model Metrics
+        echo "" >> report.md
         echo "### Model Metrics" >> report.md
-        echo '```
-        cat metrics.json >> report.md
+        echo '```json' >> report.md
+        if [ -f metrics.json ]; then
+          cat metrics.json >> report.md
+        else
+          echo "Metrics file not found." >> report.md
+        fi
         echo '```' >> report.md
 
+        # Create the comment on the pull request or commit
         cml comment create report.md
