@@ -1,0 +1,91 @@
+# .github/workflows/dev_ci.yml
+name: Dev Branch CI
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0 # For DVC to work correctly
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install 'dvc[gs]'
+
+    - name: Authenticate to GCP
+      id: 'auth'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+    - name: Configure DVC remote (for CI)
+      run: |
+        dvc remote add -d gcsremote gs://mlops-wk-1-sanjay007/dvc_store
+        dvc remote modify gcsremote --local project linear-stock-473507-v3
+
+    - name: DVC Pull (fetch model and data)
+      run: |
+        dvc pull
+
+    - name: Run Pytest for Data Validation
+      run: pytest tests/test_data_validation.py
+
+    - name: Run Pytest for Evaluation
+      run: pytest tests/test_evaluation.py
+
+    - name: Train and Evaluate Model (for CML sanity check)
+      run: |
+        python src/model.py
+        python -c "
+import joblib
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from src.evaluation import evaluate_model
+model = joblib.load('models/iris_model.joblib')
+iris = load_iris()
+X, y = iris.data, iris.target
+_, X_test, _, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+evaluate_model(model, X_test, y_test, output_path='metrics.json')
+"
+        cat metrics.json
+
+    - name: Run CML report
+      env:
+        REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "## CI Report (Dev Branch)" > report.md
+        echo "### Data Validation Tests" >> report.md
+        pytest tests/test_data_validation.py --junitxml=data_validation_report.xml || true
+        echo '```
+        cat data_validation_report.xml >> report.md
+        echo '```' >> report.md
+
+        echo "### Model Evaluation Tests" >> report.md
+        pytest tests/test_evaluation.py --junitxml=evaluation_report.xml || true
+        echo '```
+        cat evaluation_report.xml >> report.md
+        echo '```' >> report.md
+
+        echo "### Model Metrics" >> report.md
+        echo '```
+        cat metrics.json >> report.md
+        echo '```' >> report.md
+
+        cml comment create report.md
