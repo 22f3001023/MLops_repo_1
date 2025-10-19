@@ -39,43 +39,54 @@ jobs:
         dvc remote add -f -d gcsremote gs://mlops-wk-1-sanjay007/dvc_store
 
     - name: DVC Pull (fetch model and data)
-      run: dvc pull
+      run: |
+        dvc pull
 
     - name: Run Tests and Generate Reports
       run: |
+        # Run tests and generate XML reports. `|| true` ensures the workflow continues even if tests fail.
         pytest tests/test_data_validation.py --junitxml=data_validation_report.xml || true
         pytest tests/test_evaluation.py --junitxml=evaluation_report.xml || true
 
     - name: Train Model
       run: python src/model.py
-
+        
     - name: Evaluate Model
       run: python run_eval.py
-
-    - name: Generate Report
+         
+    - name: Generate CML Report
+      env:
+        REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        # Start the report
         echo "## CI Report (Main Branch)" > report.md
-        echo "" >> report.md
+
+        # Append Data Validation Test Results
+        echo "" >> report.md # Add a newline for spacing
         echo "### Data Validation Tests" >> report.md
-        echo '```
+        echo '```xml' >> report.md
         if [ -f data_validation_report.xml ]; then
           cat data_validation_report.xml >> report.md
         else
           echo "Data validation report not found." >> report.md
         fi
         echo '```' >> report.md
+
+        # Append Model Evaluation Test Results
         echo "" >> report.md
         echo "### Model Evaluation Tests" >> report.md
-        echo '```
+        echo '```xml' >> report.md
         if [ -f evaluation_report.xml ]; then
           cat evaluation_report.xml >> report.md
         else
           echo "Model evaluation report not found." >> report.md
         fi
         echo '```' >> report.md
+
+        # Append Model Metrics
         echo "" >> report.md
         echo "### Model Metrics" >> report.md
-        echo '```
+        echo '```json' >> report.md
         if [ -f metrics.json ]; then
           cat metrics.json >> report.md
         else
@@ -83,18 +94,5 @@ jobs:
         fi
         echo '```' >> report.md
 
-    - name: Upload CI Report
-      uses: actions/upload-artifact@v3
-      with:
-        name: ci-report
-        path: report.md
-
-    # Uncomment below ONLY if CML is working
-    # - name: Try Post CML Comment (will likely fail)
-    #   env:
-    #     REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   run: |
-    #     pip install cml || true
-    #     cml comment create report.md || true
-
-
+        # Create the comment on the pull request or commit
+        cml comment create report.md
