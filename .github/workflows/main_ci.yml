@@ -1,0 +1,98 @@
+name: Main Branch CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install 'dvc[gs]'
+
+    - name: Authenticate to GCP
+      id: 'auth'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+    - name: Configure DVC remote (for CI)
+      run: |
+        dvc remote add -f -d gcsremote gs://mlops-wk-1-sanjay007/dvc_store
+
+    - name: DVC Pull (fetch model and data)
+      run: |
+        dvc pull
+
+    - name: Run Tests and Generate Reports
+      run: |
+        # Run tests and generate XML reports. `|| true` ensures the workflow continues even if tests fail.
+        pytest tests/test_data_validation.py --junitxml=data_validation_report.xml || true
+        pytest tests/test_evaluation.py --junitxml=evaluation_report.xml || true
+
+    - name: Train Model
+      run: python src/model.py
+        
+    - name: Evaluate Model
+      run: python run_eval.py
+         
+    - name: Generate CML Report
+      env:
+        REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Start the report
+        echo "## CI Report (Main Branch)" > report.md
+
+        # Append Data Validation Test Results
+        echo "" >> report.md # Add a newline for spacing
+        echo "### Data Validation Tests" >> report.md
+        echo '```xml' >> report.md
+        if [ -f data_validation_report.xml ]; then
+          cat data_validation_report.xml >> report.md
+        else
+          echo "Data validation report not found." >> report.md
+        fi
+        echo '```' >> report.md
+
+        # Append Model Evaluation Test Results
+        echo "" >> report.md
+        echo "### Model Evaluation Tests" >> report.md
+        echo '```xml' >> report.md
+        if [ -f evaluation_report.xml ]; then
+          cat evaluation_report.xml >> report.md
+        else
+          echo "Model evaluation report not found." >> report.md
+        fi
+        echo '```' >> report.md
+
+        # Append Model Metrics
+        echo "" >> report.md
+        echo "### Model Metrics" >> report.md
+        echo '```json' >> report.md
+        if [ -f metrics.json ]; then
+          cat metrics.json >> report.md
+        else
+          echo "Metrics file not found." >> report.md
+        fi
+        echo '```' >> report.md
+
+        # Create the comment on the pull request or commit
+        cml comment create report.md
